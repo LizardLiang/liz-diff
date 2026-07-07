@@ -1,0 +1,191 @@
+*liz-diff.txt*    Browse git diffs from a floating window and vimdiff splits
+
+==============================================================================
+CONTENTS                                                *liz-diff-contents*
+
+    1. Introduction ..................... |liz-diff-introduction|
+    2. Requirements ...................... |liz-diff-requirements|
+    3. Installation ...................... |liz-diff-installation|
+    4. Usage ............................. |liz-diff-usage|
+       :LizDiff .......................... |:LizDiff|
+       :LizDiffFile ...................... |:LizDiffFile|
+    5. Keymaps ........................... |liz-diff-keymaps|
+    6. Configuration ..................... |liz-diff-configuration|
+    7. API ................................ |liz-diff-api|
+
+==============================================================================
+1. Introduction                                    *liz-diff-introduction*
+                                                                 *liz-diff*
+
+`liz-diff.nvim` is a lightweight Neovim git diff plugin written in pure
+Lua. Pop open a floating window, type any git reference, and browse the
+changed files, then open each one in a native side-by-side vimdiff split.
+No external diff tool, no heavy UI, no plugin dependencies.
+
+Features ~
+    - Centered floating window with an input prompt and a navigable
+      changed-files list.
+    - Any git reference: branch, commit hash, tag, range (`main..HEAD`),
+      or empty for unstaged working-tree changes.
+    - Side-by-side vimdiff per file status: added files show an empty
+      left pane, deleted files show an empty right pane, renamed files
+      are treated as modified, and binary files notify instead of
+      crashing.
+    - In-memory cache per keyword: reopening the panel restores the last
+      reference's results instantly.
+    - Explicit refresh: <CR> always re-fetches on submit, and `R`
+      refreshes the results list in place without leaving the float.
+    - Cursor position remembered per keyword across re-opens.
+    - Zero dependencies beyond Neovim 0.9+ and git.
+
+==============================================================================
+2. Requirements                                    *liz-diff-requirements*
+
+    - Neovim >= 0.9.0
+    - git (on `$PATH`)
+
+==============================================================================
+3. Installation                                    *liz-diff-installation*
+
+Using lazy.nvim: >lua
+    {
+      'LizardLiang/liz-diff.nvim',
+      cmd = 'LizDiff',
+      opts = {},
+    }
+<
+Using packer.nvim: >lua
+    use {
+      'LizardLiang/liz-diff.nvim',
+      config = function()
+        require('liz_diff').setup()
+      end,
+    }
+<
+==============================================================================
+4. Usage                                                  *liz-diff-usage*
+
+                                                                  *:LizDiff*
+:LizDiff
+
+    Opens a centered floating window with an input prompt. Type a git
+    reference and press <CR> to load the changed files. Leave the
+    prompt empty to see unstaged working-tree changes.
+
+    Pressing <CR> in the prompt always re-runs `git diff` for the typed
+    reference, even if it was already fetched this session, keeping
+    unstaged working-tree diffs current. Pressing <CR> on a file in the
+    results list closes the float and opens a vertical vimdiff split
+    with the reference version on the left and the working tree on the
+    right.
+
+    If the plugin's process directory is not inside a git work tree,
+    |:LizDiff| warns "liz-diff: not a git repository" and does nothing.
+
+                                                              *:LizDiffFile*
+:LizDiffFile [{ref}]
+
+    Diffs the file in the current buffer against a git reference
+    ({ref}, default `HEAD`) with zero prompts — the floating window is
+    skipped entirely. Also available as
+    `require('liz_diff').open_current({ref})`.
+
+    Side order is the deliberate opposite of |:LizDiff|'s list flow: the
+    working buffer (current buffer, including unsaved edits) is placed
+    on the LEFT, and the reference/commit version is placed on the
+    RIGHT, with focus returned to the left window. |:LizDiff| itself is
+    unchanged (commit left / working right). >
+
+    :LizDiffFile          " current file vs HEAD
+    :LizDiffFile main     " current file vs the main branch
+<
+    If the file does not exist at the given reference (a new or
+    untracked file), the right pane opens empty instead of erroring,
+    and its buffer name carries a ` (new file)` marker so the blank
+    pane clearly means "absent at that ref" rather than a real empty
+    file.
+
+    Guards:
+    - No file in the current buffer (e.g. an empty or special buffer):
+      notifies "liz-diff: no file in current buffer" and does nothing.
+    - Current buffer is already a liz-diff reference buffer: notifies
+      "liz-diff: cannot diff a liz-diff reference buffer" and does
+      nothing.
+    - The buffer's own directory is not inside a git work tree: warns
+      "liz-diff: not a git repository" and does nothing. This check is
+      scoped to the file's directory, not Neovim's process cwd, so it
+      still works when Neovim was launched from outside any repo.
+
+==============================================================================
+5. Keymaps                                              *liz-diff-keymaps*
+
+These keymaps are active inside the |:LizDiff| floating window only (they
+do not apply to |:LizDiffFile|, which has no float):
+
+    Key            Action ~
+    <CR>           Open the file under the cursor in vimdiff.
+    R              Refresh the file list for the current reference in
+                   place, preserving cursor position. No-op until a
+                   reference has been submitted at least once.
+    j / k          Navigate the results list.
+    <Esc> / q      Close the float.
+    i / /          From the results list, refocus the prompt for
+                   insert mode.
+
+The close, open-diff, and refresh keys are configurable, see
+|liz-diff-configuration|.
+
+==============================================================================
+6. Configuration                                  *liz-diff-configuration*
+
+                                                              *liz-diff-setup*
+require('liz_diff').setup({opts})
+
+    Merges {opts} into the default configuration. All fields are
+    optional; call with no arguments to use the defaults as-is. >lua
+
+    require('liz_diff').setup({
+      width  = 0.8,       -- float width as fraction of editor width
+      height = 0.6,       -- float height as fraction of editor height
+      border = 'rounded', -- 'rounded' | 'single' | 'double' | 'none'
+      keymap = {
+        close     = { '<Esc>', 'q' },
+        open_diff = '<CR>',
+        refresh   = 'R',
+      },
+    })
+<
+    Fields ~
+        width       (number) Float width as a fraction of `vim.o.columns`.
+                    Default: `0.8`
+        height      (number) Float height as a fraction of `vim.o.lines`.
+                    Default: `0.6`
+        border      (string) Float border style: 'rounded', 'single',
+                    'double', or 'none'.
+                    Default: `'rounded'`
+        keymap.close      (string[]) Keys that close the float, bound in
+                    both the prompt and results buffers.
+                    Default: `{ '<Esc>', 'q' }`
+        keymap.open_diff  (string) Key bound in the results buffer that
+                    opens the file under the cursor in vimdiff.
+                    Default: `'<CR>'`
+        keymap.refresh    (string) Key bound in the results buffer that
+                    re-runs the diff for the current reference in place.
+                    Default: `'R'`
+
+==============================================================================
+7. API                                                    *liz-diff-api*
+
+require('liz_diff').setup({opts})              See |liz-diff-setup| above.
+
+require('liz_diff').open()
+    Opens the |:LizDiff| floating window. Equivalent to running
+    |:LizDiff|.
+
+require('liz_diff').open_current({ref})
+    Diffs the current buffer's file against {ref} (default `HEAD`).
+    Equivalent to running |:LizDiffFile| {ref}. See |:LizDiffFile| for
+    full behavior, including side order and guards.
+
+==============================================================================
+vim:tw=78:ts=8:noet:ft=help:norl:

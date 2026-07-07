@@ -4,11 +4,12 @@
 
 ![Neovim](https://img.shields.io/badge/Neovim-0.9+-57A143?logo=neovim&logoColor=white)
 ![Made with Lua](https://img.shields.io/badge/made%20with-Lua-2C2D72?logo=lua&logoColor=white)
-![GitHub stars](https://img.shields.io/github/stars/LizardLiang/liz-diff?style=social)
+![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
+![GitHub stars](https://img.shields.io/github/stars/LizardLiang/liz-diff.nvim?style=social)
 
 `liz-diff.nvim` is a lightweight **Neovim git diff plugin** written in pure Lua. Pop open a floating window, type any git reference, and browse the changed files — then open each one in a native side-by-side diff. No external diff tool, no heavy UI, no plugin dependencies.
 
-![liz-diff.nvim demo — browse git diffs in a Neovim floating window](https://raw.githubusercontent.com/LizardLiang/liz-diff/master/assets/demo.gif)
+![liz-diff.nvim demo — browse git diffs in a Neovim floating window](https://raw.githubusercontent.com/LizardLiang/liz-diff.nvim/master/assets/demo.gif)
 
 ## Table of contents
 
@@ -105,7 +106,9 @@ end, { desc = 'liz-diff: current file vs HEAD' })
 ```
 
 If the file doesn't exist at the given reference (new/untracked file), the
-right pane opens empty instead of erroring.
+right pane opens empty instead of erroring, and its buffer name carries a
+` (new file)` marker so it's clear the blank pane means "absent at that ref"
+rather than a real empty file.
 
 ## Configuration
 
@@ -132,6 +135,10 @@ require('liz_diff').setup({
 4. Pressing `<CR>` on a file closes the float and opens a vertical vimdiff split (reference version vs working tree).
 5. Pressing `R` with the results list focused re-runs `git diff` for the currently displayed reference in place, preserving the cursor position (clamped to the new list length).
 6. Each successful fetch is cached in memory so closing and reopening the panel restores the last reference's results and cursor position without a git call.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
 
 ---
 
