@@ -1,3 +1,5 @@
+local git = require('liz_diff.git')
+
 local M = {}
 
 local ref_buffers = {}
@@ -125,7 +127,11 @@ function M.open_current(reference)
   M.cleanup_previous()
 
   local out = vim.fn.system({ 'git', '-C', dir, 'show', reference .. ':' .. relpath })
-  local ref_content = (vim.v.shell_error == 0) and out or ''
+  local ok = vim.v.shell_error == 0
+  local ref_content = ok and out or ''
+  -- A new file exists on disk but not in `reference`; show a blank reference
+  -- side (marked below) instead of surfacing git's "exists on disk" error.
+  local is_new_file = (not ok) and git.is_new_file(dir, reference, relpath)
 
   vim.cmd('diffthis')
   local left_win = vim.api.nvim_get_current_win()
@@ -146,7 +152,11 @@ function M.open_current(reference)
   vim.api.nvim_set_option_value('swapfile', false, { buf = ref_buf })
   vim.api.nvim_set_option_value('modifiable', false, { buf = ref_buf })
 
-  vim.api.nvim_buf_set_name(ref_buf, 'liz-diff://' .. reference .. '/' .. relpath)
+  local ref_name = 'liz-diff://' .. reference .. '/' .. relpath
+  if is_new_file then
+    ref_name = ref_name .. ' (new file)'
+  end
+  vim.api.nvim_buf_set_name(ref_buf, ref_name)
 
   local ft = vim.filetype.match({ filename = relpath }) or ''
   vim.api.nvim_set_option_value('filetype', ft, { buf = ref_buf })

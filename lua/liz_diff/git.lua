@@ -97,6 +97,16 @@ function M.merge_results(name_status, numstat)
   return results
 end
 
+-- True when `path` is absent from `reference`'s tree while the reference itself
+-- resolves — i.e. a genuinely new file. Locale-independent: keys off `git
+-- ls-tree` exit code + empty stdout, never git's (translatable) error text. A
+-- missing path at a valid ref prints nothing with exit 0; an unresolvable ref
+-- exits non-zero.
+function M.is_new_file(dir, reference, path)
+  local out = vim.fn.system({ 'git', '-C', dir, 'ls-tree', '-r', reference, '--', path })
+  return vim.v.shell_error == 0 and vim.trim(out) == ''
+end
+
 local function run_git(args, on_done)
   local stdout_chunks = {}
   local stderr_chunks = {}

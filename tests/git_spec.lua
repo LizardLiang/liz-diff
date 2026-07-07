@@ -238,6 +238,26 @@ describe('liz-diff.git', function()
     end)
   end)
 
+  describe('is_new_file()', function()
+    it('returns true when path is absent at a valid ref', function()
+      vim.fn.system = function() return '' end
+      vim.v = { shell_error = 0 }
+      assert.is_true(git.is_new_file('/repo', 'HEAD', 'src/new.tsx'))
+    end)
+
+    it('returns false when path exists at the ref', function()
+      vim.fn.system = function() return '100644 blob abc123\tsrc/exists.lua\n' end
+      vim.v = { shell_error = 0 }
+      assert.is_false(git.is_new_file('/repo', 'HEAD', 'src/exists.lua'))
+    end)
+
+    it('returns false when the ref does not resolve', function()
+      vim.fn.system = function() return '' end
+      vim.v = { shell_error = 128 }
+      assert.is_false(git.is_new_file('/repo', 'BADREF', 'src/x.lua'))
+    end)
+  end)
+
   describe('is_git_repo()', function()
     -- These tests require vim.fn.system mock
     -- Included as contract tests; actual behavior tested in integration

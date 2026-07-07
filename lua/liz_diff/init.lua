@@ -6,7 +6,7 @@ local diff = require('liz_diff.diff')
 
 local M = {}
 
-M._VERSION = "0.3.0"
+M._VERSION = "0.3.1"
 
 local state = {
   current_keyword = nil,
