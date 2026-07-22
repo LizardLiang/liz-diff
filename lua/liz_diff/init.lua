@@ -7,12 +7,14 @@ local pr = require('liz_diff.pr')
 
 local M = {}
 
-M._VERSION = "0.6.0"
+M._VERSION = "0.7.0"
 
 local state = {
   current_keyword = nil,
   current_pr = nil,
   current_root = nil,
+  current_files = nil,
+  current_index = nil,
   active_jobs = {},
 }
 
@@ -26,6 +28,39 @@ local function format_files(files)
     lines[#lines + 1] = ui.format_line(file)
   end
   return lines
+end
+
+-- Normalizes a 1-based index into the range 1..n with wrap-around at both ends
+-- (index n+1 -> 1, index 0 -> n), handling arbitrary over/underflow. Returns
+-- nil for an empty list. Pure and exported so the wrap math is unit-testable
+-- without a live diff view.
+function M.wrap_index(index, n)
+  if not n or n == 0 then
+    return nil
+  end
+  return ((index - 1) % n + n) % n + 1
+end
+
+-- Opens the diff for the file at `index` in the active nav session, wrapping the
+-- index into range first. Records the new position, syncs the picker's cached
+-- cursor so a reopen lands on this file, dispatches through the same
+-- diff.open_pr / diff.open path on_select uses, and echoes `path (i/n)`.
+local function open_file_at(index)
+  local files = state.current_files
+  if not files or #files == 0 then
+    return
+  end
+  local n = #files
+  index = M.wrap_index(index, n)
+  state.current_index = index
+  local file = files[index]
+  cache.set_cursor(state.current_keyword, index)
+  if state.current_pr then
+    diff.open_pr(state.current_pr, file, state.current_root)
+  else
+    diff.open(state.current_keyword, file, state.current_root)
+  end
+  vim.api.nvim_echo({ { string.format('liz-diff: %s (%d/%d)', file.filepath, index, n) } }, false, {})
 end
 
 function M.open()
@@ -139,13 +174,14 @@ function M.open()
   end
 
   local function on_select(file)
-    cache.set_cursor(state.current_keyword, ui.get_cursor_index())
+    -- Capture the full list as an active nav session so :LizDiffNext / ]f can
+    -- move to sibling files without reopening the picker. The file's row index
+    -- (not the file arg) drives navigation from here on.
+    local idx = ui.get_cursor_index()
+    local cached = cache.get(state.current_keyword)
+    state.current_files = cached and cached.files or { file }
     ui.close()
-    if state.current_pr then
-      diff.open_pr(state.current_pr, file, state.current_root)
-    else
-      diff.open(state.current_keyword, file, state.current_root)
-    end
+    open_file_at(idx)
   end
 
   ui.open(on_submit, on_select, on_refresh)
@@ -165,6 +201,25 @@ function M.open()
       state.current_root = cached.root
     end
   end
+end
+
+-- Navigate to the next/previous file in the active list, wrapping at the ends.
+-- No-ops with an INFO notify when no list has been selected from (e.g. after
+-- only :LizDiffFile, which has no list).
+function M.next()
+  if not state.current_files or #state.current_files == 0 then
+    vim.notify('liz-diff: no active file list', vim.log.levels.INFO)
+    return
+  end
+  open_file_at((state.current_index or 1) + 1)
+end
+
+function M.prev()
+  if not state.current_files or #state.current_files == 0 then
+    vim.notify('liz-diff: no active file list', vim.log.levels.INFO)
+    return
+  end
+  open_file_at((state.current_index or 1) - 1)
 end
 
 function M.open_current(ref)

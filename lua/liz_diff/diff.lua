@@ -4,7 +4,53 @@ local M = {}
 
 local ref_buffers = {}
 
+-- Buffers carrying the buffer-local ]f / [f nav keymaps. Tracked separately
+-- from ref_buffers because the raw-ref LEFT pane is the user's real working
+-- file buffer (not wiped on cleanup) — its keymaps must be deleted explicitly
+-- so no lingering plugin mapping survives the diff session.
+local nav_mapped_buffers = {}
+
+local function nav_keys()
+  local cfg = require('liz_diff.config').get().keymap
+  local keys = {}
+  if type(cfg.next_file) == 'string' and cfg.next_file ~= '' then
+    keys[#keys + 1] = { key = cfg.next_file, fn = function() require('liz_diff').next() end }
+  end
+  if type(cfg.prev_file) == 'string' and cfg.prev_file ~= '' then
+    keys[#keys + 1] = { key = cfg.prev_file, fn = function() require('liz_diff').prev() end }
+  end
+  return keys
+end
+
+local function clear_nav_keymaps()
+  local keys = nav_keys()
+  for _, buf in ipairs(nav_mapped_buffers) do
+    if vim.api.nvim_buf_is_valid(buf) then
+      for _, k in ipairs(keys) do
+        pcall(vim.keymap.del, 'n', k.key, { buffer = buf })
+      end
+    end
+  end
+  nav_mapped_buffers = {}
+end
+
+-- Sets the configured next/previous-file keymaps on each valid buffer so the
+-- user can cycle files from whichever diff pane is focused. Callbacks require
+-- 'liz_diff' lazily (require is cached) to avoid an init<->diff load cycle.
+local function set_nav_keymaps(bufs)
+  local keys = nav_keys()
+  for _, buf in ipairs(bufs) do
+    if buf and vim.api.nvim_buf_is_valid(buf) then
+      for _, k in ipairs(keys) do
+        vim.keymap.set('n', k.key, k.fn, { buffer = buf })
+      end
+      nav_mapped_buffers[#nav_mapped_buffers + 1] = buf
+    end
+  end
+end
+
 function M.cleanup_previous()
+  clear_nav_keymaps()
   for _, buf in ipairs(ref_buffers) do
     if vim.api.nvim_buf_is_valid(buf) then
       local wins = vim.fn.win_findbuf(buf)
@@ -142,11 +188,14 @@ function M.open(reference, file, root)
 
   vim.cmd('diffthis')
   local left_win = vim.api.nvim_get_current_win()
+  local left_buf = vim.api.nvim_win_get_buf(left_win)
 
   local ft = vim.filetype.match({ filename = file.filepath }) or ''
 
   -- Force the new window to the RIGHT regardless of the user's 'splitright'.
-  open_ref_pane('rightbelow', ref_content, M.ref_buffer_name(ref_label, file.filepath, is_new_file), ft)
+  local right_buf = open_ref_pane('rightbelow', ref_content, M.ref_buffer_name(ref_label, file.filepath, is_new_file), ft)
+
+  set_nav_keymaps({ left_buf, right_buf })
 
   vim.api.nvim_set_current_win(left_win)
 end
@@ -250,12 +299,14 @@ function M.open_pr(pr, file, root)
   local label = 'PR#' .. tostring(pr.n)
 
   -- RIGHT pane = base, in the current window.
-  fill_scratch(base_content, M.ref_buffer_name(label .. ' base', base_path), ft)
+  local base_buf = fill_scratch(base_content, M.ref_buffer_name(label .. ' base', base_path), ft)
 
   -- Force the head pane to the LEFT regardless of the user's 'splitright'.
   -- open_ref_pane leaves the new (head) window focused, which is the desired
   -- final focus for the PR flow — no explicit restore needed.
-  open_ref_pane('leftabove', head_content, M.ref_buffer_name(label .. ' head', head_path), ft)
+  local head_buf = open_ref_pane('leftabove', head_content, M.ref_buffer_name(label .. ' head', head_path), ft)
+
+  set_nav_keymaps({ base_buf, head_buf })
 end
 
 return M

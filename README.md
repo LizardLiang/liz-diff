@@ -27,6 +27,7 @@
 - **Any git reference** — branch, commit hash, tag, range (`main..HEAD`), or empty for all uncommitted changes (staged + unstaged + untracked)
 - **Pull / merge request review** — prefix the prompt with `#` or `!` (e.g. `#123`) to browse a GitHub PR or GitLab MR's `base...head` diff, read-only head-left / base-right (needs the `gh` / `glab` CLI; core stays zero-dependency)
 - **Side-by-side vimdiff** per file status: added files show the working file on the left and an empty, `(new file)`-marked reference pane on the right, deleted files show a `[deleted]` placeholder on the left and the reference content on the right, renamed files are treated as modified, and — in the `:LizDiff` list flow — binary files notify instead of crashing
+- **Next / previous file navigation** — after opening a file from the list, jump straight to the next or previous changed file with `]f` / `[f` (or `:LizDiffNext` / `:LizDiffPrev`) without reopening the picker; wraps around at both ends
 - **In-memory cache per keyword** — reopening the panel restores the last reference's results instantly
 - **Explicit refresh** — `<CR>` always re-fetches on submit, and `R` refreshes the results list in place without leaving the float
 - **Cursor position remembered** per keyword across re-opens
@@ -78,6 +79,27 @@ Opens the floating window. Type a git reference in the prompt and press `<CR>` t
 | `<Esc>` / `q` | Close the float                               |
 
 Pressing `<CR>` in the prompt always re-runs `git diff` for the typed reference, even if it was already fetched this session — this keeps unstaged working-tree diffs current. Pressing `R` while the results list is focused re-runs `git diff` for the currently displayed reference without leaving the results window, preserving the cursor position. `R` is a no-op until a reference has been submitted at least once.
+
+### Navigating between files in the diff view
+
+Once you've opened a file from the `:LizDiff` list, you can move to the next or
+previous file in that same list **without** reopening the picker:
+
+| Key / command                     | Action                          |
+| --------------------------------- | ------------------------------- |
+| `]f` &nbsp;·&nbsp; `:LizDiffNext` | Diff the next file in the list  |
+| `[f` &nbsp;·&nbsp; `:LizDiffPrev` | Diff the previous file          |
+
+The `]f` / `[f` keymaps are set buffer-locally on the diff panes (both sides),
+so they work from whichever pane is focused. Navigation **wraps around** — next
+on the last file jumps to the first, previous on the first jumps to the last —
+and works for both raw-ref and PR/MR lists. The commands (and the underlying
+`require('liz_diff').next()` / `require('liz_diff').prev()`) work from anywhere;
+they notify `liz-diff: no active file list` if no `:LizDiff` list has been
+opened from yet.
+
+The keys are configurable via `keymap.next_file` / `keymap.prev_file` (set
+either to `false` to disable that mapping and rely on the commands only).
 
 ### `:LizDiffFile` — current file vs a reference
 
@@ -167,6 +189,8 @@ require('liz_diff').setup({
     close     = { '<Esc>', 'q' },
     open_diff = '<CR>',
     refresh   = 'R',
+    next_file = ']f',   -- next file in the diff view (false to disable)
+    prev_file = '[f',   -- previous file in the diff view (false to disable)
   },
 })
 ```
@@ -176,7 +200,7 @@ require('liz_diff').setup({
 1. `:LizDiff` opens a centered float with an input prompt.
 2. Typing a reference and pressing `<CR>` runs `git diff --numstat <ref>` asynchronously — every submit fetches fresh, even for a previously-seen reference.
 3. Results render as `<status> <path> +<insertions> -<deletions>`.
-4. Pressing `<CR>` on a file closes the float and opens a vertical vimdiff split (working tree on the left, reference version on the right).
+4. Pressing `<CR>` on a file closes the float and opens a vertical vimdiff split (working tree on the left, reference version on the right). The file list stays active, so `]f` / `[f` (or `:LizDiffNext` / `:LizDiffPrev`) cycle to sibling files without reopening the picker.
 5. Pressing `R` with the results list focused re-runs `git diff` for the currently displayed reference in place, preserving the cursor position (clamped to the new list length).
 6. Each successful fetch is cached in memory so closing and reopening the panel restores the last reference's results and cursor position without a git call.
 

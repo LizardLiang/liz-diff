@@ -9,6 +9,7 @@ CONTENTS                                                   *liz-diff-contents*
     4. Usage ............................. |liz-diff-usage|
        :LizDiff .......................... |:LizDiff|
        PR / MR review .................... |liz-diff-pr|
+       File navigation ................... |liz-diff-navigation|
        :LizDiffFile ...................... |:LizDiffFile|
     5. Keymaps ........................... |liz-diff-keymaps|
     6. Configuration ..................... |liz-diff-configuration|
@@ -34,6 +35,10 @@ Features ~
       left and the reference content on the right, renamed files are
       treated as modified, and — in the |:LizDiff| list flow — binary
       files notify instead of crashing.
+    - Next / previous file navigation: after opening a file from the
+      list, jump to the next / previous changed file with `]f` / `[f`
+      (or |:LizDiffNext| / |:LizDiffPrev|) without reopening the picker;
+      wraps around at both ends.
     - In-memory cache per keyword: reopening the panel restores the last
       reference's results instantly.
     - Explicit refresh: <CR> always re-fetches on submit, and `R`
@@ -125,6 +130,32 @@ PR / MR review ~
     remote URL, so GitHub Enterprise / self-hosted GitLab on custom domains
     are not auto-detected yet.
 
+                                                          *liz-diff-navigation*
+                                              *:LizDiffNext* *:LizDiffPrev*
+File navigation ~
+
+    After opening a file from the |:LizDiff| list, move to the next or
+    previous file in that same list without reopening the picker: >
+
+    ]f   or  :LizDiffNext     " diff the next file in the list
+    [f   or  :LizDiffPrev     " diff the previous file
+<
+    The `]f` / `[f` keymaps are set buffer-locally on both diff panes, so
+    they work from whichever pane is focused. Navigation WRAPS AROUND:
+    next on the last file goes to the first, previous on the first goes to
+    the last. Works for both raw-ref and PR/MR lists.
+
+    The commands (and `require('liz_diff').next()` /
+    `require('liz_diff').prev()`) work from anywhere and notify
+    "liz-diff: no active file list" if no |:LizDiff| list has been opened
+    from yet (e.g. after only |:LizDiffFile|, which has no list).
+
+    Navigating also updates the remembered cursor so reopening |:LizDiff|
+    lands on the file currently under review. Configure the keys with
+    `keymap.next_file` / `keymap.prev_file` (set either to `false` to
+    disable that mapping and use the commands only), see
+    |liz-diff-configuration|.
+
                                                                 *:LizDiffFile*
 :LizDiffFile [{ref}]
 
@@ -180,8 +211,15 @@ do not apply to |:LizDiffFile|, which has no float):
     i / /          From the results list, refocus the prompt for
                    insert mode.
 
-The close, open-diff, and refresh keys are configurable, see
-|liz-diff-configuration|.
+These keymaps are active on the two diff panes after a file is opened
+(see |liz-diff-navigation|):
+
+    Key            Action ~
+    ]f             Diff the next file in the list (wraps to the first).
+    [f             Diff the previous file in the list (wraps to the last).
+
+The close, open-diff, refresh, and next/prev-file keys are configurable,
+see |liz-diff-configuration|.
 
 ==============================================================================
 6. Configuration                                      *liz-diff-configuration*
@@ -200,6 +238,8 @@ require('liz_diff').setup({opts})
         close     = { '<Esc>', 'q' },
         open_diff = '<CR>',
         refresh   = 'R',
+        next_file = ']f',
+        prev_file = '[f',
       },
     })
 <
@@ -220,6 +260,12 @@ require('liz_diff').setup({opts})
         keymap.refresh    (string) Key bound in the results buffer that
                     re-runs the diff for the current reference in place.
                     Default: `'R'`
+        keymap.next_file  (string) Key bound on the diff panes that opens
+                    the next file in the list. `false` disables it.
+                    Default: `']f'`
+        keymap.prev_file  (string) Key bound on the diff panes that opens
+                    the previous file in the list. `false` disables it.
+                    Default: `'[f'`
 
 ==============================================================================
 7. API                                                          *liz-diff-api*
@@ -234,6 +280,12 @@ require('liz_diff').open_current({ref})
     Diffs the current buffer's file against {ref} (default `HEAD`).
     Equivalent to running |:LizDiffFile| {ref}. See |:LizDiffFile| for
     full behavior, including side order and guards.
+
+require('liz_diff').next()
+require('liz_diff').prev()
+    Opens the next / previous file in the active |:LizDiff| list, wrapping
+    at the ends. Equivalent to |:LizDiffNext| / |:LizDiffPrev|. No-op with
+    a notification when no list is active. See |liz-diff-navigation|.
 
 ==============================================================================
 vim:tw=78:ts=8:noet:ft=help:norl:
